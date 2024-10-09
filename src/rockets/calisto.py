@@ -86,3 +86,4 @@ drogue = calisto.add_parachute(
 
 #calisto.plots.static_margin() # Generates a plot of the static margin
 # calisto.draw() # Visualises the rocket
+calisto.all_info() # Prints all info about the rocket
