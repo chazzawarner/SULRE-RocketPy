@@ -1,19 +1,19 @@
-from rocketpy import Rocket, Fluid, LiquidMotor, CylindricalTank, MassFlowRateBasedTank
+from rocketpy import Rocket, Fluid, LiquidMotor, CylindricalTank, MassFlowRateBasedTank, MassBasedTank
 from math import exp
 
 # Define constants
-radius = 0.16 / 2 #m
-length = 3.07 - 0.05 #m (total length of rocket minus the overlap of the fins)
-nose_length = 0.7 #m
+rocket_radius = 0.152 / 2 #m
+rocket_length = 2.9 #m
+nose_length = 0.5 #m
 
 # Initialise rocket
 comet = Rocket(
-    radius=radius, #m
-    mass=30.9 - 7.6, #kg (mass without motor and engine mass (7.6kg))
-    inertia=(1.5, 1.5, 0.1), #kg*m^2 ???
-    power_off_drag="src/data/comet1/comet1v4 drag curve.csv", #path to csv file
-    power_on_drag="src/data/comet1/comet1v4 drag curve.csv", #path to same csv file
-    center_of_mass_without_motor=2.03, #m
+    radius=rocket_radius, #m
+    mass=16.82, #kg (mass without motor and engine mass (7.6kg))
+    inertia=(11.73, 0.08, 11.73), #kg*m^2 ???
+    power_off_drag="src/data/comet1/comet1v5 drag curve2.csv", #path to csv file
+    power_on_drag="src/data/comet1/comet1v5 drag curve2.csv", #path to same csv file
+    center_of_mass_without_motor=1.4, #m
     coordinate_system_orientation="nose_to_tail"
 )
 
@@ -32,6 +32,8 @@ nitrogen_gas = Fluid(name="N2_g", density=343.6) # Calculated using mass/volume 
 
 ### Define oxidizer tank
 oxidizer_tank_shape = CylindricalTank(radius = 0.127/2, height = 0.582)
+#print(oxidizer_tank_shape.total_volume)
+
 oxidizer_tank = MassFlowRateBasedTank(
     name="oxidizer tank",
     geometry=oxidizer_tank_shape,
@@ -63,7 +65,7 @@ fuel_tank = MassFlowRateBasedTank(
 )
 
 ### Define nitrogen tank (No clue what happens here)
-nitrogen_tank_shape = CylindricalTank(radius = 0.111/2, height = 0.296)
+nitrogen_tank_shape = CylindricalTank(radius = 0.111/2, height = 0.296) # Unsure if spherical caps are on top of current length or not
 nitrogen_tank = MassFlowRateBasedTank(
     name="nitrogen tank",
     geometry=nitrogen_tank_shape,
@@ -80,21 +82,33 @@ nitrogen_tank = MassFlowRateBasedTank(
 
 ## Add tanks to motor
 engine = LiquidMotor( # What's the engine's name?
-    thrust_source="src/data/motors/SULRE_Comet1v10.eng",
-    dry_mass=7.6,
-    dry_inertia=(0.125, 0.125, 0.002),
-    nozzle_radius=0.075,
-    center_of_dry_mass_position=1.75,
-    nozzle_position=0,
+    thrust_source="src/data/motors/SULRE_Comet1v11.eng",
+    dry_mass=9.43, #kg (tanks plus engine mass)
+    dry_inertia=(2.87, 0.02, 2.87), # kg*m^2, I_11, I_22, I_33
+    nozzle_radius=49.28e-3, #m
+    center_of_dry_mass_position=0.798, #m
+    nozzle_position=0, #m
     burn_time=8,
     coordinate_system_orientation="nozzle_to_combustion_chamber",
 )
-engine.add_tank(tank=oxidizer_tank, position=1.0)
-engine.add_tank(tank=fuel_tank, position=2.5)
-engine.add_tank(tank=nitrogen_tank, position=3.5)
+
+motor_length = 1.838 # m, distance from top of nitrogen tank to the end of the nozzle
+engine_length = 0.311 # m, length of the engine
+nitrogen_length = 0.296 # m, length of nitrogen tank
+fuel_length = 0.158 # m, length of fuel tank
+oxidizer_length = 0.582 # m, length of oxidizer tank
+remaining_length = motor_length - (engine_length + nitrogen_length + fuel_length + oxidizer_length)
+average_spacing = remaining_length / 3
+
+engine.add_tank(tank=oxidizer_tank, position=engine_length + average_spacing + 0.5*oxidizer_length)
+engine.add_tank(tank=fuel_tank, position=engine_length + 2*average_spacing + oxidizer_length + 0.5*fuel_length)
+engine.add_tank(tank=nitrogen_tank, position=engine_length + 3*average_spacing + oxidizer_length + fuel_length + 0.5*nitrogen_length)
+
+#engine.draw()
+#engine.all_info()
 
 ## Add motor to rocket
-comet.add_motor(engine, position=2.78)
+comet.add_motor(engine, position=rocket_length)
 
 # Add aerodynamic surfaces
 nose_cone = comet.add_nose(
@@ -103,22 +117,55 @@ nose_cone = comet.add_nose(
     position=0.0 #m
 )
 
-fin_set = comet.add_trapezoidal_fins(
-    n=4, #number of fins
+"""fin_set = comet.add_trapezoidal_fins(
+    n=3, #number of fins
     root_chord=0.35, #m
     tip_chord=0.1, #m
     span=0.15, #m (distance from root to tip, presumably)
-    position=2.67, #m
+    position=2.55, #m (distance from nose to fin set)
     airfoil=("src/data/calisto/NACA0012-radians.csv","radians"), #path to airfoil file, same as calisto (for now)
     sweep_length=0.305 #m
+)"""
+
+fin_set = comet.add_trapezoidal_fins(
+    n=4,
+    root_chord=0.26, # Actually 0.252
+    tip_chord=0.1, # Actually 0.05
+    span=0.12,
+    position=2.8, # Actually 2.641
+    #airfoil=("src/data/calisto/NACA0012-radians.csv","radians"),
+    sweep_length=0.17
 )
+    
 
 tail = comet.add_tail(
-    top_radius=radius, #m
-    bottom_radius=0.1 / 2, #m
-    length=0.15, #m
-    position=length - 0.15 #m (distance from nose to tail minus its length)
+    top_radius=rocket_radius, #m
+    bottom_radius=0.099 / 2, #m
+    length=0.201, #m
+    position=rocket_length - 0.201 #m (distance from nose to tail minus its length)
 )
 
+# Add parachutes
+main = comet.add_parachute(
+    name="main",
+    cd_s=10.27, # drag coefficient * reference area (96 inches diameter?)
+    trigger=450, # ejection altitude in meters
+    sampling_rate=105, # Hz
+    lag=1.5, # time in seconds for chute to deploy after trigger
+    noise=(0, 8.3, 0.5),
+)
+
+
+drogue = comet.add_parachute(
+    name="drogue",
+    cd_s=0.452, # drag coefficient * reference area (24 inches diameter?)
+    trigger="apogee", # ejection at apogee
+    sampling_rate=105, # Hz
+    lag=2, # time in seconds for chute to deploy after trigger
+    noise=(0, 8.3, 0.5),
+)
+
+
 # Draw rocket
-comet.draw()
+#comet.draw()
+comet.all_info()
